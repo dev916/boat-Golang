@@ -1,0 +1,11 @@
+*.exe
+__debug_bin
+app-local.yaml
+db/
+debug.test
+harvest
+log.txt
+nada/cache.json
+sessions/
+www/i
+www/min.js
