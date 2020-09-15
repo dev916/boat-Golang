@@ -9,3 +9,5 @@ nada/cache.json
 sessions/
 www/i
 www/min.js
+vendor
+.vscode/settings.json
