@@ -3,6 +3,7 @@ package sites
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"image"
 	"io/ioutil"
 	"net/http"
@@ -34,6 +35,9 @@ func getPage(cachePath, url string) (*page, error) {
 			return nil, err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, errors.New("URL does not exists")
+		}
 		bytes, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
