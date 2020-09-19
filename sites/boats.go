@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -88,29 +87,36 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	}
 	btboatsJSON := btBoatPage.Find1ByRE(btBoatsJSONPattern, 1, "0", "0")
 	boatType := boatTypePattern.FindStringSubmatch(btboatsJSON)[1]
+	fieldXPath := func(name string) string {
+		return `//div[@class='collapsible open']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
+	}
+	var boatPage *page
 	switch boatType {
 	case "power":
 		{
-			fieldXPath := func(name string) string {
-				return `//div[@class='collapsible open']/table/tbody/tr/th[text()=` + name + `]/td/child::text()`
-			}
-
-			url := "https://www.boats.com/power-boats/" + id
-			boatPage, err := getPage(btBaseDir+"boats/"+id+".htm", url)
+			url := btBaseURL + "power-boats/" + id
+			boatPage, err = getPage(btBaseDir+"boats/"+id+".htm", url)
 			if err != nil {
 				return 0, err
 			}
-			boat.Year = boatPage.Int(boatPage.Find0or1(nil, fieldXPath("Model"), "", ""), nil)
-			log.Println(boat.Year)
+			boat.Locomotion = "Power"
 		}
 	case "sail":
 		{
-			url := "https://www.boats.com/sailing-boats/" + id
-			_, err := getPage(btBaseDir+"boats/"+id+".htm", url)
+			url := btBaseURL + "sailing-boats/" + id
+			boatPage, err = getPage(btBaseDir+"boats/"+id+".htm", url)
 			if err != nil {
 				return 0, err
 			}
+			boat.Locomotion = "Sail"
 		}
+	default:
+		return 0, errors.New("boat not found")
 	}
+	boat.Year = boatPage.Int(boatPage.Find1(nil, fieldXPath("Year"), "", ""), nil)
+	boat.Make = boatPage.Find1(nil, fieldXPath("Make"), "", "")
+	boat.Model = boatPage.Find1(nil, fieldXPath("Model"), "", "")
+	boat.Condition = boatPage.Find1(nil, fieldXPath("Condition"), "", "")
+	boat.FuelType = boatPage.Find1(nil, fieldXPath("Fuel Type"), "", "")
 	return 0, nil
 }
