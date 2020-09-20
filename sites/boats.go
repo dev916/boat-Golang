@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -14,9 +15,9 @@ import (
 
 var (
 	btBaseURL          = "https://www.boats.com/"
-	sourceBaseURL      = "https://www.boattrader.com"
+	sourceBaseURL      = "https://www.boattrader.com/"
 	btURLPattern       = regexp.MustCompile(`^https://www\.boats\.com/boat/([0-9]*)`)
-	btBaseDir          = "/Users/ankitagarwal/ankit_code/boat-golang/harvest/www.boats.com/"
+	btBaseDir          = "harvest/www.boats.com/"
 	btBoatMap          = map[string]int64{}
 	btBoatsJSONPattern = regexp.MustCompile(`<script>var __REDUX_STATE__=(.*)<\/script>`)
 	boatTypePattern    = regexp.MustCompile(`"type":"((.*?))"`)
@@ -79,9 +80,8 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	if boatID, ok := btBoatMap[id]; ok {
 		return boatID, nil
 	}
-	url := "https://www.boattrader.com/boat/" + id
-	boat := api.Boat{URLs: []string{url}, Sale: &api.BoatSale{}}
-	btBoatPage, err := getPage(btBaseDir+"boattrader/"+id+".htm", url)
+	btURL := "https://www.boattrader.com/boat/" + id
+	btBoatPage, err := getPage(btBaseDir+"boattrader/"+id+".htm", btURL)
 	if err != nil {
 		return 0, err
 	}
@@ -90,6 +90,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	fieldXPath := func(name string) string {
 		return `//div[@class='collapsible open']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
 	}
+	boat := api.Boat{Sale: &api.BoatSale{}}
 	var boatPage *page
 	switch boatType {
 	case "power":
@@ -99,6 +100,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 			if err != nil {
 				return 0, err
 			}
+			boat = api.Boat{URLs: []string{url}}
 			boat.Locomotion = "Power"
 		}
 	case "sail":
@@ -108,6 +110,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 			if err != nil {
 				return 0, err
 			}
+			boat = api.Boat{URLs: []string{url}}
 			boat.Locomotion = "Sail"
 		}
 	default:
@@ -118,5 +121,14 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	boat.Model = boatPage.Find1(nil, fieldXPath("Model"), "", "")
 	boat.Condition = boatPage.Find1(nil, fieldXPath("Condition"), "", "")
 	boat.FuelType = boatPage.Find1(nil, fieldXPath("Fuel Type"), "", "")
+	boat.Length = float32(boatPage.Float64(strings.Split(boatPage.Find1(nil, fieldXPath("Length"), "", ""), " ")[0], nil))
+	boat.Beam = float32(boatPage.Float64(strings.Split(boatPage.Find1(nil, fieldXPath("Beam"), "", ""), " ")[0], nil))
+	location := strings.Split(strings.Trim(boatPage.Find1(nil, fieldXPath("Location"), "", ""), ","), " ")
+	boat.Location = &api.Contact{
+		Type:  "Address",
+		City:  location[0],
+		State: location[1],
+	}
+	log.Println(boat)
 	return 0, nil
 }
