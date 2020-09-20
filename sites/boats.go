@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"math"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"boatfuji.com/api"
@@ -80,16 +81,13 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	if boatID, ok := btBoatMap[id]; ok {
 		return boatID, nil
 	}
-	btURL := "https://www.boattrader.com/boat/" + id
+	btURL := sourceBaseURL + "boat/" + id
 	btBoatPage, err := getPage(btBaseDir+"boattrader/"+id+".htm", btURL)
 	if err != nil {
 		return 0, err
 	}
 	btboatsJSON := btBoatPage.Find1ByRE(btBoatsJSONPattern, 1, "0", "0")
 	boatType := boatTypePattern.FindStringSubmatch(btboatsJSON)[1]
-	fieldXPath := func(name string) string {
-		return `//div[@class='collapsible open']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
-	}
 	boat := api.Boat{Sale: &api.BoatSale{}}
 	var boatPage *page
 	switch boatType {
@@ -116,19 +114,46 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	default:
 		return 0, errors.New("boat not found")
 	}
+
+	// This function is used to extract the features for the boat from the HTML.
+	fieldXPath := func(name string) string {
+		return `//div[@class='collapsible open']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
+	}
+
+	// This function is used to calculate the overall length and length.
+	calculateFt := func(length string) float32 {
+		var parsedTokens []float64
+		reg := regexp.MustCompile("[0-9]+")
+		filtered := reg.FindAllString(length, -1)
+		for _, v := range filtered {
+			k, _ := strconv.ParseFloat(v, 32)
+			parsedTokens = append(parsedTokens, k)
+		}
+		if len(parsedTokens) > 1 {
+			return float32(math.Floor((parsedTokens[0]+(parsedTokens[1]/12))*100) / 100)
+		}
+		return float32(parsedTokens[0])
+	}
+	fieldYPath := func(name string) string {
+		return `//div[@class='collapsible']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
+	}
+
+	// Extracting main features for the boat from boats.com page.
 	boat.Year = boatPage.Int(boatPage.Find1(nil, fieldXPath("Year"), "", ""), nil)
 	boat.Make = boatPage.Find1(nil, fieldXPath("Make"), "", "")
 	boat.Model = boatPage.Find1(nil, fieldXPath("Model"), "", "")
 	boat.Condition = boatPage.Find1(nil, fieldXPath("Condition"), "", "")
 	boat.FuelType = boatPage.Find1(nil, fieldXPath("Fuel Type"), "", "")
-	boat.Length = float32(boatPage.Float64(strings.Split(boatPage.Find1(nil, fieldXPath("Length"), "", ""), " ")[0], nil))
-	boat.Beam = float32(boatPage.Float64(strings.Split(boatPage.Find1(nil, fieldXPath("Beam"), "", ""), " ")[0], nil))
+	boat.Length = calculateFt(boatPage.Find1(nil, fieldXPath("Length"), "", ""))
+	boat.LengthOverall = calculateFt(boatPage.Find1(nil, fieldYPath("LOA"), "", ""))
+	boat.Beam = calculateFt(boatPage.Find1(nil, fieldYPath("Beam"), "", ""))
+
 	location := strings.Split(strings.Trim(boatPage.Find1(nil, fieldXPath("Location"), "", ""), ","), " ")
 	boat.Location = &api.Contact{
 		Type:  "Address",
 		City:  location[0],
 		State: location[1],
 	}
-	log.Println(boat)
+
 	return 0, nil
 }
