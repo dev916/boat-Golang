@@ -88,7 +88,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	}
 	btboatsJSON := btBoatPage.Find1ByRE(btBoatsJSONPattern, 1, "0", "0")
 	boatType := boatTypePattern.FindStringSubmatch(btboatsJSON)[1]
-	boat := api.Boat{Sale: &api.BoatSale{}}
+	boat := api.Boat{}
 	var boatPage *page
 	switch boatType {
 	case "power":
@@ -98,7 +98,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 			if err != nil {
 				return 0, err
 			}
-			boat = api.Boat{URLs: []string{url}}
+			boat = api.Boat{URLs: []string{url}, Sale: &api.BoatSale{}}
 			boat.Locomotion = "Power"
 		}
 	case "sail":
@@ -108,7 +108,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 			if err != nil {
 				return 0, err
 			}
-			boat = api.Boat{URLs: []string{url}}
+			boat = api.Boat{URLs: []string{url}, Sale: &api.BoatSale{}}
 			boat.Locomotion = "Sail"
 		}
 	default:
@@ -118,6 +118,15 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	// This function is used to extract the features for the boat from the HTML.
 	fieldXPath := func(name string) string {
 		return `//div[@class='collapsible open']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
+	}
+	fieldYPath := func(name string) string {
+		return `//div[@class='collapsible']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
+	}
+
+	// This function removes comma and currency symbols from price.
+	calcaulePrice := func(price string) string {
+		reg, _ := regexp.Compile("[^0-9]+")
+		return reg.ReplaceAllString(price, "")
 	}
 
 	// This function is used to calculate the overall length and length.
@@ -134,15 +143,19 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 		}
 		return float32(parsedTokens[0])
 	}
-	fieldYPath := func(name string) string {
-		return `//div[@class='collapsible']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
-	}
 
 	// Extracting main features for the boat from boats.com page.
+	boat.ID, err = strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return 0, err
+	}
 	boat.Year = boatPage.Int(boatPage.Find1(nil, fieldXPath("Year"), "", ""), nil)
 	boat.Make = boatPage.Find1(nil, fieldXPath("Make"), "", "")
 	boat.Model = boatPage.Find1(nil, fieldXPath("Model"), "", "")
 	boat.Condition = boatPage.Find1(nil, fieldXPath("Condition"), "", "")
+	boat.Type = boatPage.Find1(nil, fieldXPath("Type"), "", "")
+	boat.HullMaterials = []string{boatPage.Find1(nil, fieldXPath("Hull Material"), "", "")}
+	boat.Class = boatPage.Find1(nil, fieldXPath("Class"), "", "")
 	boat.FuelType = boatPage.Find1(nil, fieldXPath("Fuel Type"), "", "")
 	boat.Length = calculateFt(boatPage.Find1(nil, fieldXPath("Length"), "", ""))
 	boat.LengthOverall = calculateFt(boatPage.Find1(nil, fieldYPath("LOA"), "", ""))
@@ -150,10 +163,42 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 
 	location := strings.Split(strings.Trim(boatPage.Find1(nil, fieldXPath("Location"), "", ""), ","), " ")
 	boat.Location = &api.Contact{
-		Type:  "Address",
-		City:  location[0],
-		State: location[1],
+		Type:    "Address",
+		City:    location[0],
+		State:   location[1],
+		Country: "US",
 	}
-
-	return 0, nil
+	listingDescription := strings.Join(boatPage.FindN(nil, `//div[@class='desc-text']/p/text()`, 0, 999, "", ""), " ")
+	outsideSpace := regexp.MustCompile(`^[\s\p{Zs}]+|[\s\p{Zs}]+$`)
+	insideSpace := regexp.MustCompile(`[\s\p{Zs}]{2,}`)
+	final := outsideSpace.ReplaceAllString(listingDescription, " ")
+	boat.Sale = &api.BoatSale{
+		Price: float32(boatPage.Float64(calcaulePrice(boatPage.Find1(nil, `//span[@class="price"]/text()`, "", "")), nil)),
+		Address: &api.Contact{
+			Country: "US",
+		},
+		ListingDescription: insideSpace.ReplaceAllString(final, " "),
+	}
+	imageURLs := boatPage.FindN(nil, "//div[@class='carousel']/ul/li/@data-src_w0", 0, 99999, "", "")
+	images := []api.Image{}
+	for _, imageURL := range imageURLs {
+		if imageURL != "" {
+			image := boatPage.Image(imageURL, 600, 400, removeBSWatermark)
+			if image != nil {
+				images = append(images, *image)
+			}
+		}
+	}
+	if len(images) > 0 {
+		boat.Images = images
+	}
+	api.SetBoat(&api.Request{Session: &api.Session{IsGod: true}, Boat: &boat}, nil)
+	if site.WriteSQL {
+		writeBoatSQL(&boat)
+	}
+	boatJSON, _ := json.Marshal(boat)
+	ioutil.WriteFile(btBaseDir+"boats/"+id+".json", boatJSON, 0644)
+	boatPage.SaveWarnings(btBaseDir + "boats/" + id + ".txt")
+	btBoatMap[id] = boat.ID
+	return boat.ID, nil
 }
