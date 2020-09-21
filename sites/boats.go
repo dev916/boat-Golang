@@ -18,7 +18,7 @@ var (
 	btBaseURL               = "https://www.boats.com/"
 	sourceBaseURL           = "https://www.boattrader.com/"
 	btURLPattern            = regexp.MustCompile(`^https://www\.boats\.com/boat/([0-9]*)`)
-	btBaseDir               = "/Users/ankitagarwal/ankit_code/boat-golang/harvest/www.boats.com/"
+	btBaseDir               = "harvest/www.boats.com/"
 	btBoatMap               = map[string]int64{}
 	btBoatsJSONPattern      = regexp.MustCompile(`<script>var __REDUX_STATE__=(.*)<\/script>`)
 	locationPattern         = regexp.MustCompile(`{location:{lat:'(-?[0-9]{1,3}\.[0-9]{1,10})',lng:'(-?[0-9]{1,3}\.[0-9]{1,10}).*'`)
