@@ -15,14 +15,15 @@ import (
 )
 
 var (
-	btBaseURL          = "https://www.boats.com/"
-	sourceBaseURL      = "https://www.boattrader.com/"
-	btURLPattern       = regexp.MustCompile(`^https://www\.boats\.com/boat/([0-9]*)`)
-	btBaseDir          = "harvest/www.boats.com/"
-	btBoatMap          = map[string]int64{}
-	btBoatsJSONPattern = regexp.MustCompile(`<script>var __REDUX_STATE__=(.*)<\/script>`)
-	locationPattern    = regexp.MustCompile(`{location:{lat:'(-?[0-9]{1,3}\.[0-9]{1,10})',lng:'(-?[0-9]{1,3}\.[0-9]{1,10}).*'`)
-	boatTypePattern    = regexp.MustCompile(`"type":"((.*?))"`)
+	btBaseURL               = "https://www.boats.com/"
+	sourceBaseURL           = "https://www.boattrader.com/"
+	btURLPattern            = regexp.MustCompile(`^https://www\.boats\.com/boat/([0-9]*)`)
+	btBaseDir               = "/Users/ankitagarwal/ankit_code/boat-golang/harvest/www.boats.com/"
+	btBoatMap               = map[string]int64{}
+	btBoatsJSONPattern      = regexp.MustCompile(`<script>var __REDUX_STATE__=(.*)<\/script>`)
+	locationPattern         = regexp.MustCompile(`{location:{lat:'(-?[0-9]{1,3}\.[0-9]{1,10})',lng:'(-?[0-9]{1,3}\.[0-9]{1,10}).*'`)
+	boatTypePattern         = regexp.MustCompile(`"type":"((.*?))"`)
+	btBoatHorsepowerPattern = regexp.MustCompile(`^(\d+) hp$`)
 )
 
 func init() {
@@ -116,12 +117,15 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 		return 0, errors.New("boat not found")
 	}
 
-	// This function is used to extract the features for the boat from the HTML.
+	// These functions are used to extract the features for the boat from the HTML.
 	fieldXPath := func(name string) string {
 		return `//div[@class='collapsible open']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
 	}
 	fieldYPath := func(name string) string {
 		return `//div[@class='collapsible']/table/tbody/tr/th[text()='` + name + `']/../td/text()`
+	}
+	fieldEPath := func(name string) string {
+		return `//div[@id='propulsion']/div[@class='collapsible']/table[1]/tbody/tr/th[text()='` + name + `']/../td/text()`
 	}
 
 	// This function removes comma and currency symbols from price.
@@ -159,6 +163,9 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	boat.FuelType = boatPage.Find1(nil, fieldXPath("Fuel Type"), "", "")
 	boat.Length = calculateFt(boatPage.Find1(nil, fieldYPath("LOA"), "", ""))
 	boat.Beam = calculateFt(boatPage.Find1(nil, fieldYPath("Beam"), "", ""))
+	boat.EngineMake = boatPage.Find1(nil, fieldEPath("Engine Make"), "", "")
+	boat.EngineModel = boatPage.Find1(nil, fieldEPath("Engine Model"), "", "")
+	boat.EnginePower = boatPage.Int(boatPage.Find1(nil, fieldEPath("Power"), "", ""), btBoatHorsepowerPattern)
 
 	location := strings.Split(strings.Trim(boatPage.Find1(nil, fieldXPath("Location"), "", ""), ","), " ")
 	boat.Location = &api.Contact{
@@ -192,10 +199,10 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	if len(images) > 0 {
 		boat.Images = images
 	}
-	api.SetBoat(&api.Request{Session: &api.Session{IsGod: true}, Boat: &boat}, nil)
-	if site.WriteSQL {
-		writeBoatSQL(&boat)
-	}
+	// api.SetBoat(&api.Request{Session: &api.Session{IsGod: true}, Boat: &boat}, nil)
+	// if site.WriteSQL {
+	// 	writeBoatSQL(&boat)
+	// }
 	boatJSON, _ := json.Marshal(boat)
 	ioutil.WriteFile(btBaseDir+"boats/"+id+".json", boatJSON, 0644)
 	boatPage.SaveWarnings(btBaseDir + "boats/" + id + ".txt")
