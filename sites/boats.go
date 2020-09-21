@@ -177,7 +177,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	final := outsideSpace.ReplaceAllString(listingDescription, " ")
 	boat.Sale = &api.BoatSale{
 		Price:              float32(boatPage.Float64(calcaulePrice(boatPage.Find1(nil, `//span[@class="price"]/text()`, "", "")), nil)),
-		ListingDescription: insideSpace.ReplaceAllString(final, " "),
+		ListingDescription: strings.TrimPrefix(insideSpace.ReplaceAllString(final, " "), " "),
 	}
 	imageURLs := boatPage.FindN(nil, "//div[@class='carousel']/ul/li/@data-src_w0", 0, 99999, "", "")
 	images := []api.Image{}
@@ -192,10 +192,10 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	if len(images) > 0 {
 		boat.Images = images
 	}
-	// api.SetBoat(&api.Request{Session: &api.Session{IsGod: true}, Boat: &boat}, nil)
-	// if site.WriteSQL {
-	// 	writeBoatSQL(&boat)
-	// }
+	api.SetBoat(&api.Request{Session: &api.Session{IsGod: true}, Boat: &boat}, nil)
+	if site.WriteSQL {
+		writeBoatSQL(&boat)
+	}
 	boatJSON, _ := json.Marshal(boat)
 	ioutil.WriteFile(btBaseDir+"boats/"+id+".json", boatJSON, 0644)
 	boatPage.SaveWarnings(btBaseDir + "boats/" + id + ".txt")
