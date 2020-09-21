@@ -15,6 +15,7 @@ import (
 
 	"boatfuji.com/api"
 	"github.com/antchfx/htmlquery"
+	"github.com/antchfx/xpath"
 	"golang.org/x/net/html"
 )
 
@@ -50,6 +51,11 @@ func getPage(cachePath, url string) (*page, error) {
 		return nil, err
 	}
 	return &page{HTML: htmlString, Doc: doc}, nil
+}
+
+func (p *page) CountByRE(expr string) float64 {
+	ex, _ := xpath.Compile(`count(` + expr + `)`)
+	return ex.Evaluate(htmlquery.CreateXPathNavigator(p.Doc)).(float64)
 }
 
 func (p *page) Find1ByRE(re *regexp.Regexp, group int, if0, ifN string) string {

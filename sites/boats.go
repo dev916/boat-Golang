@@ -166,6 +166,7 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	boat.EngineMake = boatPage.Find1(nil, fieldEPath("Engine Make"), "", "")
 	boat.EngineModel = boatPage.Find1(nil, fieldEPath("Engine Model"), "", "")
 	boat.EnginePower = boatPage.Int(boatPage.Find1(nil, fieldEPath("Power"), "", ""), btBoatHorsepowerPattern)
+	boat.EngineCount = int(boatPage.CountByRE(`//div[@id='propulsion']/div[@class='collapsible']/table`))
 
 	location := strings.Split(strings.Trim(boatPage.Find1(nil, fieldXPath("Location"), "", ""), ","), " ")
 	boat.Location = &api.Contact{
