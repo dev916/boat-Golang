@@ -199,10 +199,10 @@ func (site *Boats) harvestBoat(id string) (int64, error) {
 	if len(images) > 0 {
 		boat.Images = images
 	}
-	// api.SetBoat(&api.Request{Session: &api.Session{IsGod: true}, Boat: &boat}, nil)
-	// if site.WriteSQL {
-	// 	writeBoatSQL(&boat)
-	// }
+	api.SetBoat(&api.Request{Session: &api.Session{IsGod: true}, Boat: &boat}, nil)
+	if site.WriteSQL {
+		writeBoatSQL(&boat)
+	}
 	boatJSON, _ := json.Marshal(boat)
 	ioutil.WriteFile(btBaseDir+"boats/"+id+".json", boatJSON, 0644)
 	boatPage.SaveWarnings(btBaseDir + "boats/" + id + ".txt")
